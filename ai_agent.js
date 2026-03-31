@@ -403,11 +403,14 @@
     }
 
     // ── GAS call ─────────────────────────────────────────────
+    // NOTE: Must use Content-Type: text/plain to avoid CORS preflight.
+    // GAS blocks OPTIONS preflight on application/json. Body is still JSON.
     async function callGAS(msg) {
         const ctx = buildContext();
         const res = await fetch(GAS_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            method:   'POST',
+            redirect: 'follow',
+            headers:  { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify({
                 action:  'ai_query',
                 message: msg,
