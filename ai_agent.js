@@ -8,66 +8,35 @@
 
     const GAS_URL = 'https://script.google.com/macros/s/AKfycbymRy-M5v0fVLWUjw4IXYhd1oIR2ZvnP_Dzr_iGR-Th0cMIpmE2ntGeujWYH7-C6NHIzA/exec';
     const SHEET_ID = '1cXlYiTMzcRP1BCj9mt1JXoK_pjgWbRtDEEQUPMg2HPs';
-    const SESSION_KEY = 'icf_sbd_session';
 
     // ════════════════════════════════════════════════════════
-    //  SESSION PERSISTENCE
-    //  Wraps showLoginScreen (called after CSV loads) so we
-    //  can auto-fill credentials and skip the login screen
-    //  on every page refresh.
+    //  AUTO-START  — no login required
+    //  script_option2.js calls showLoginScreen() after the CSV
+    //  loads. We override it to skip directly to startApp().
     // ════════════════════════════════════════════════════════
-    (function patchSession() {
-        // 1. Wrap startApp → save session on successful login
-        const origStart = window.startApp;
-        window.startApp = function (displayName, isAdmin) {
-            try {
-                localStorage.setItem(SESSION_KEY, JSON.stringify({
-                    username:    isAdmin ? 'admin' : (window.state?.currentUser || displayName.toLowerCase()),
-                    displayName: displayName,
-                    isAdmin:     !!isAdmin,
-                    ts:          Date.now()
-                }));
-            } catch(e) {}
-            return origStart && origStart.call(this, displayName, isAdmin);
-        };
-
-        // 2. Wrap handleLogout → clear session
-        const origLogout = window.handleLogout;
-        window.handleLogout = function () {
-            try { localStorage.removeItem(SESSION_KEY); } catch(e) {}
-            return origLogout && origLogout.call(this);
-        };
-
-        // 3. Wrap showLoginScreen → auto-login if session exists
-        //    showLoginScreen() is called by init() AFTER the CSV loads,
-        //    so USER_MAP is already populated when we get here.
-        const origShow = window.showLoginScreen;
+    (function patchAutoStart() {
+        // Override showLoginScreen → auto-start as admin
         window.showLoginScreen = function () {
-            const sess = _getSession();
-            if (sess) {
-                // Show screen briefly (keeps DOM visible), then auto-login
-                origShow && origShow.call(this);
-                setTimeout(() => {
-                    const uEl = document.getElementById('loginUsername');
-                    const pEl = document.getElementById('loginPassword');
-                    if (uEl) uEl.value = sess.username;
-                    if (pEl) pEl.value = sess.isAdmin ? 'admin123' : '';
-                    window.handleLogin && window.handleLogin();
-                }, 0);
-            } else {
-                origShow && origShow.call(this);
+            if (window.state) {
+                window.state.currentUser = 'admin';
+                window.state.isAdmin     = true;
+                window.LOCATION_DATA     = window.ALL_LOCATION_DATA || {};
             }
+            window.startApp && window.startApp('ICF-SL', true);
         };
-    })();
 
-    function _getSession() {
-        try {
-            const s = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
-            // Sessions valid for 30 days
-            if (s && s.username && (Date.now() - (s.ts || 0)) < 30 * 24 * 3600 * 1000) return s;
-        } catch(e) {}
-        return null;
-    }
+        // Override hideLoginScreen → just show appMain (loginScreen stub stays hidden)
+        window.hideLoginScreen = function () {
+            const ls = document.getElementById('loginScreen');
+            if (ls) ls.style.display = 'none';
+            const am = document.getElementById('appMain');
+            if (am) { am.style.display = 'flex'; am.style.flexDirection = 'column'; }
+            if (typeof cacheImagesForOffline === 'function') cacheImagesForOffline();
+        };
+
+        // Override handleLogout → no-op (no login to return to)
+        window.handleLogout = function () { /* no login screen */ };
+    })();
 
     // ════════════════════════════════════════════════════════
     //  STYLES
