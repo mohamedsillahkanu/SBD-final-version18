@@ -689,16 +689,15 @@
     }
 
     function getSubmittedSet() {
-        // Returns Set of lowercase school names from submitted records
-        const rows = mergeData(_sheetRows);
-        return new Set(rows.map(r => (r.school_name || '').trim().toLowerCase()));
+        // Returns Set of lowercase school names from Google Sheets only — no local/session data
+        return new Set((_sheetRows || []).map(r => (r.school_name || '').trim().toLowerCase()).filter(Boolean));
     }
 
     function renderTargetsTab() {
         const body = document.getElementById('targetsBody');
         if (!body) return;
 
-        const tree     = buildTargetsTree();
+        const tree      = buildTargetsTree();
         const submitted = getSubmittedSet();
         const districts = Object.keys(tree).sort();
 
@@ -710,7 +709,16 @@
             return;
         }
 
-        // ── National totals ──────────────────────────────────────
+        // Show banner if sheet data not yet fetched
+        const sheetBanner = _sheetRows.length === 0
+            ? `<div class="alert" style="background:#fff8e1;border:1px solid #ffe082;border-radius:9px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:8px;font-size:12px;color:#8a6500;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#c8991a" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                Submission counts show Google Sheets data only. Hit <strong>REFRESH</strong> to pull the latest from the server.
+              </div>`
+            : `<div class="alert" style="background:#e8f5e9;border:1px solid #b2dfcc;border-radius:9px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:8px;font-size:12px;color:#2e7d32;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#28a745" stroke-width="2" width="16" height="16"><path d="M9 11l3 3L22 4"/></svg>
+                Showing <strong>${_sheetRows.length} submissions</strong> from Google Sheets.
+              </div>`;
         let natSchools = 0, natDone = 0;
         districts.forEach(d => {
             Object.values(tree[d].chiefdoms).forEach(c => {
@@ -721,7 +729,7 @@
         const natPct = natSchools > 0 ? Math.round((natDone / natSchools) * 100) : 0;
 
         // ── Build HTML ───────────────────────────────────────────
-        let html = `
+        let html = sheetBanner + `
         <style>
         .tg-kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:18px;}
         .tg-kpi{background:#fff;border-radius:10px;padding:14px 10px;text-align:center;box-shadow:0 2px 8px rgba(0,64,128,.07);border-top:4px solid #004080;}
