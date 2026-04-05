@@ -31,8 +31,8 @@ body{overflow-x:hidden;}
 /* LOGIN */
 #scr-login{background:linear-gradient(155deg,var(--navy-d) 0%,var(--navy) 60%,#005a9e 100%);align-items:center;justify-content:center;padding:24px 16px;}
 .login-card{background:#fff;border-radius:20px;padding:28px 24px;width:100%;max-width:380px;box-shadow:0 20px 50px rgba(0,0,0,.35);border-top:5px solid var(--gold);}
-.login-logo{width:64px;height:64px;border-radius:14px;overflow:hidden;border:3px solid var(--gold);margin:0 auto 14px;display:flex;align-items:center;justify-content:center;background:var(--navy);}
-.login-logo img{width:100%;height:100%;object-fit:cover;}
+.login-logo{margin:0 auto 14px;display:flex;align-items:center;justify-content:center;}
+.login-logo img{width:80px;height:80px;object-fit:contain;border-radius:10px;}
 .login-title{font-size:18px;font-weight:700;color:var(--navy);text-align:center;letter-spacing:.5px;}
 .login-sub{font-size:11px;color:var(--text-s);text-align:center;letter-spacing:.5px;text-transform:uppercase;margin-bottom:16px;}
 .login-divider{width:40px;height:3px;background:var(--gold);margin:8px auto 14px;}
@@ -159,8 +159,8 @@ body{overflow-x:hidden;}
 /* RECEIPT */
 .receipt-card{background:#fff;border-radius:16px;border:3px solid var(--gold);box-shadow:0 8px 30px rgba(0,0,0,.12);overflow:hidden;margin-bottom:14px;}
 .receipt-header{background:linear-gradient(135deg,var(--navy-d),var(--navy));padding:16px 20px;text-align:center;}
-.receipt-header-logo{width:48px;height:48px;background:#fff;border-radius:10px;border:2px solid var(--gold);overflow:hidden;margin:0 auto 10px;}
-.receipt-header-logo img{width:100%;height:100%;object-fit:cover;}
+.receipt-header-logo{margin:0 auto 10px;display:flex;align-items:center;justify-content:center;}
+.receipt-header-logo img{width:54px;height:54px;object-fit:contain;border-radius:8px;}
 .receipt-header h2{font-size:16px;font-weight:700;color:#fff;letter-spacing:.8px;}
 .receipt-header p{font-size:10px;color:rgba(255,255,255,.6);margin-top:2px;letter-spacing:.5px;text-transform:uppercase;}
 .receipt-qr-section{padding:18px;text-align:center;border-bottom:2px dashed var(--border);}
@@ -378,7 +378,7 @@ body{overflow-x:hidden;}
             </div>
             <div style="display:flex;justify-content:flex-end;margin-top:14px;">
               <button class="btn btn-navy" onclick="goStep2()">
-                NEXT — VERIFY DRIVER
+                NEXT — VERIFY CONVEYOR
                 <svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
               </button>
             </div>
