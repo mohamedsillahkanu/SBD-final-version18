@@ -1,5 +1,5 @@
 {
-  "name": "SBD 2026 \u2026 ITN Distribution",
+  "name": "SBD 2026 \u2014 ITN Distribution Survey",
   "short_name": "SBD 2026",
   "description": "School-Based Distribution of ITNs \u2014 Sierra Leone 2026",
   "start_url": "./index.html",
@@ -18,7 +18,13 @@
       "src": "./icon-maskable-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
