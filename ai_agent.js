@@ -748,76 +748,32 @@
                 })
         );
     }
-
+    // TARGET TAB
     function renderTargetsTab() {
         const body = document.getElementById('targetsBody');
         if (!body) return;
-     
-        try {
-            // Get all schools from buildTargetsTree
-            const tree = buildTargetsTree ? buildTargetsTree() : {};
-            
-            // Get all submitted schools
-            const submissions = _sheetRows || [];
-            const submittedSchools = {};
-            
-            submissions.forEach(function(row) {
-                const dist = (row.district || row.District || '').trim().toLowerCase();
-                const chf = (row.chiefdom || row.Chiefdom || '').trim().toLowerCase();
-                const school = (row.school_name || row['School Name'] || '').trim().toLowerCase().replace(/_2026$/i, '');
-                if (!dist || !chf || !school) return;
-                submittedSchools[dist + '|' + chf + '|' + school] = 1;
-            });
-     
-            // Build DENOMINATOR - OLD SCHOOLS ONLY
-            const csvSchools = {};
-            for (const d in tree) {
-                for (const c in tree[d]) {
-                    const schools = tree[d][c].schools || [];
-                    schools.forEach(function(sch) {
-                        const status = (sch.status || 'Old').trim().toLowerCase();
-                        // ONLY count if Old or Yes
-                        if (status === 'old' || status === 'yes') {
-                            const key = d.toLowerCase() + '|' + c.toLowerCase() + '|' + (sch.name || '').toLowerCase();
-                            csvSchools[key] = 1;
-                        }
-                    });
-                }
-            }
-     
-            // Calculate
-            const targetCount = Object.keys(csvSchools).length;
-            const submittedCount = Object.keys(submittedSchools).length;
-            const achievement = targetCount > 0 ? Math.round((submittedCount / targetCount) * 100) : 0;
-     
-            // Build summary by district/chiefdom
-            const districtData = {};
-            
-            Object.keys(csvSchools).forEach(function(key) {
-                const parts = key.split('|');
-                const dist = parts[0], chf = parts[1];
-                if (!districtData[dist]) districtData[dist] = {};
-                if (!districtData[dist][chf]) districtData[dist][chf] = { target: 0, submitted: 0 };
-                districtData[dist][chf].target++;
-            });
-     
-            Object.keys(submittedSchools).forEach(function(key) {
-                const parts = key.split('|');
-                const dist = parts[0], chf = parts[1];
-                if (!districtData[dist]) districtData[dist] = {};
-                if (!districtData[dist][chf]) districtData[dist][chf] = { target: 0, submitted: 0 };
-                districtData[dist][chf].submitted++;
-            });
-
+    
+        const tree = buildTargetsTree();
+        const submitted = getSubmittedSet();
+        const districts = Object.keys(tree).sort();
+    
         if (!districts.length) {
             body.innerHTML = `<div class="an-no-data">
-              <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
-              <div>No location data loaded. Ensure cascading_data.csv is present.</div>
+                <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                <div>No location data loaded. Ensure cascading_data.csv is present.</div>
             </div>`;
             return;
         }
-
-        // Show banner if sheet data not yet fetched
+    
+        const statusFilter = document.getElementById('targetStatusFilter')?.value || 'all';
+        
+        function filterByStatus(school) {
+            const schoolStatus = (school.status || 'Old').toLowerCase();
+            if (statusFilter === 'old') return schoolStatus === 'old' || schoolStatus === 'yes';
+            if (statusFilter === 'new') return schoolStatus === 'new' || schoolStatus === 'no';
+            return true;
+        }
+    
         const sheetBanner = _sheetRows.length === 0
             ? `<div class="alert" style="background:#fff8e1;border:1px solid #ffe082;border-radius:9px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:8px;font-size:12px;color:#8a6500;">
                 <svg viewBox="0 0 24 24" fill="none" stroke="#c8991a" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -827,48 +783,43 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="#28a745" stroke-width="2" width="16" height="16"><path d="M9 11l3 3L22 4"/></svg>
                 Showing <strong>${_sheetRows.length} submissions</strong> from ICF-SL Server.
               </div>`;
+    
         let natSchools = 0, natDone = 0;
+        let oldSchools = 0, oldDone = 0;
+        let newSchools = 0, newDone = 0;
+        
         districts.forEach(d => {
             Object.values(tree[d].chiefdoms).forEach(c => {
-                natSchools += c.schools.length;
-                natDone    += c.schools.filter(s => submitted.has(s.key)).length;
+                const allSchools = c.schools;
+                const filteredSchools = allSchools.filter(filterByStatus);
+                
+                natSchools += filteredSchools.length;
+                natDone += filteredSchools.filter(s => submitted.has(s.key)).length;
+                
+                const oldOnes = allSchools.filter(s => (s.status || 'Old').toLowerCase() === 'old' || (s.status || 'Old').toLowerCase() === 'yes');
+                const newOnes = allSchools.filter(s => (s.status || 'New').toLowerCase() === 'new' || (s.status || 'New').toLowerCase() === 'no');
+                
+                oldSchools += oldOnes.length;
+                oldDone += oldOnes.filter(s => submitted.has(s.key)).length;
+                newSchools += newOnes.length;
+                newDone += newOnes.filter(s => submitted.has(s.key)).length;
             });
         });
+        
         const natPct = natSchools > 0 ? Math.round((natDone / natSchools) * 100) : 0;
-
-        // Duplicate rows banner
-        const dups = window.CSV_DUPLICATES || [];
-        const dupBanner = dups.length > 0 ? `
-            <div style="background:#fff0f0;border:2px solid #dc3545;border-radius:10px;margin-bottom:14px;overflow:hidden;">
-              <div style="background:#dc3545;color:#fff;padding:9px 14px;display:flex;align-items:center;gap:8px;font-family:'Oswald',sans-serif;font-size:12px;font-weight:600;letter-spacing:.5px;">
-                <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                ${dups.length} DUPLICATE ROW${dups.length>1?'S':''} IN CSV — SKIPPED FROM COUNT
-              </div>
-              <div style="padding:10px 14px;overflow-x:auto;">
-                <table style="width:100%;border-collapse:collapse;font-size:11px;">
-                  <thead><tr style="background:#fde8e8;">
-                    <th style="padding:6px 10px;text-align:left;font-family:'Oswald',sans-serif;color:#c0392b;font-weight:600;white-space:nowrap;">CSV ROW</th>
-                    <th style="padding:6px 10px;text-align:left;font-family:'Oswald',sans-serif;color:#c0392b;font-weight:600;">DISTRICT</th>
-                    <th style="padding:6px 10px;text-align:left;font-family:'Oswald',sans-serif;color:#c0392b;font-weight:600;">CHIEFDOM</th>
-                    <th style="padding:6px 10px;text-align:left;font-family:'Oswald',sans-serif;color:#c0392b;font-weight:600;">PHU</th>
-                    <th style="padding:6px 10px;text-align:left;font-family:'Oswald',sans-serif;color:#c0392b;font-weight:600;">COMMUNITY</th>
-                    <th style="padding:6px 10px;text-align:left;font-family:'Oswald',sans-serif;color:#c0392b;font-weight:600;">SCHOOL</th>
-                  </tr></thead>
-                  <tbody>${dups.map((r,i)=>`<tr style="background:${i%2?'#fff':'#fff5f5'};">
-                    <td style="padding:5px 10px;color:#8090a0;">${r.row}</td>
-                    <td style="padding:5px 10px;">${r.district}</td>
-                    <td style="padding:5px 10px;">${r.chiefdom}</td>
-                    <td style="padding:5px 10px;">${r.phu}</td>
-                    <td style="padding:5px 10px;">${r.community}</td>
-                    <td style="padding:5px 10px;font-weight:600;color:#c0392b;">${r.school}</td>
-                  </tr>`).join('')}</tbody>
-                </table>
-              </div>
-              <div style="padding:8px 14px;font-size:10px;color:#607080;border-top:1px solid #fde8e8;">Fix these duplicates in cascading_data.csv to ensure accurate target counts.</div>
-            </div>` : '';
-
-        // ── Build HTML ───────────────────────────────────────────
-        let html = sheetBanner + dupBanner + `
+        const oldPct = oldSchools > 0 ? Math.round((oldDone / oldSchools) * 100) : 0;
+        const newPct = newSchools > 0 ? Math.round((newDone / newSchools) * 100) : 0;
+    
+        let html = sheetBanner + `
+        <div style="margin-bottom:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <span style="font-family:Oswald,sans-serif;font-size:11px;color:#607080;">Filter by status:</span>
+            <select id="targetStatusFilter" onchange="renderTargetsTab()" style="border:2px solid #c5d9f0;border-radius:8px;padding:5px 10px;font-family:Oswald,sans-serif;font-size:12px;">
+                <option value="all" ${statusFilter === 'all' ? 'selected' : ''}>All Schools</option>
+                <option value="old" ${statusFilter === 'old' ? 'selected' : ''}>Old Schools Only</option>
+                <option value="new" ${statusFilter === 'new' ? 'selected' : ''}>New Schools Only</option>
+            </select>
+        </div>
+    
         <style>
         .tg-kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:18px;}
         .tg-kpi{background:#fff;border-radius:10px;padding:14px 10px;text-align:center;box-shadow:0 2px 8px rgba(0,64,128,.07);border-top:4px solid #004080;}
@@ -877,10 +828,7 @@
         .tg-kpi.g .tg-kv{color:#28a745;} .tg-kpi.r .tg-kv{color:#dc3545;} .tg-kpi.o .tg-kv{color:#b8860b;}
         .tg-kl{font-size:10px;color:#607080;text-transform:uppercase;letter-spacing:.5px;margin-top:5px;font-family:'Oswald',sans-serif;}
         .tg-nat-bar{height:14px;background:#e4eaf2;border-radius:7px;overflow:hidden;margin:10px 0 18px;}
-        .tg-nat-fill{height:100%;border-radius:7px;transition:width .5s;background:linear-gradient(90deg,#004080,#1a6abf);}
-        .tg-nat-lbl{font-family:'Oswald',sans-serif;font-size:11px;color:#607080;text-align:center;margin-top:-14px;position:relative;}
-
-        /* District card */
+        .tg-nat-fill{height:100%;border-radius:7px;transition:width .5s;}
         .tg-dist{background:#fff;border-radius:12px;box-shadow:0 2px 10px rgba(0,64,128,.08);overflow:hidden;margin-bottom:14px;border:2px solid #d0dce8;}
         .tg-dist-hdr{background:linear-gradient(135deg,#004080,#1a6abf);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px;cursor:pointer;}
         .tg-dist-hdr svg{width:14px;height:14px;stroke:#fff;fill:none;flex-shrink:0;}
@@ -888,19 +836,15 @@
         .tg-dist-badge{background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);border-radius:6px;padding:3px 10px;font-family:'Oswald',sans-serif;font-size:11px;white-space:nowrap;}
         .tg-dist-progress{height:4px;background:rgba(255,255,255,.25);}
         .tg-dist-progress-fill{height:100%;background:#c8991a;transition:width .4s;}
-
-        /* District stats row */
         .tg-dist-stats{display:grid;grid-template-columns:repeat(4,1fr);background:#f0f6ff;border-bottom:1px solid #d0dce8;}
         .tg-dist-stat{padding:10px 8px;text-align:center;border-right:1px solid #d0dce8;}
         .tg-dist-stat:last-child{border-right:none;}
         .tg-dst-v{font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;color:#004080;}
         .tg-dst-l{font-size:9px;color:#607080;text-transform:uppercase;letter-spacing:.4px;margin-top:2px;}
-
-        /* Chiefdom table */
         .tg-chief-wrap{overflow-x:auto;}
         .tg-chief-tbl{width:100%;border-collapse:collapse;font-size:12px;}
         .tg-chief-tbl thead tr{background:#e8f1fa;}
-        .tg-chief-tbl th{padding:9px 14px;font-family:'Oswald',sans-serif;font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:#004080;text-align:left;white-space:nowrap;border-bottom:2px solid #c5d9f0;}
+        .tg-chief-tbl th{padding:9px 14px;font-family:'Oswald',sans-serif;font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:#004080;text-align:left;border-bottom:2px solid #c5d9f0;}
         .tg-chief-tbl td{padding:9px 14px;border-bottom:1px solid #f0f4f8;vertical-align:middle;}
         .tg-chief-tbl tr:last-child td{border-bottom:none;}
         .tg-chief-tbl tr:nth-child(even) td{background:#fafcff;}
@@ -909,150 +853,110 @@
         .tg-prog-bar{background:#e4eaf2;border-radius:4px;height:8px;flex:1;overflow:hidden;min-width:60px;}
         .tg-prog-fill{height:100%;border-radius:4px;}
         .tg-school-chips{display:flex;flex-wrap:wrap;gap:3px;max-width:340px;}
-    .tg-chip.new-school{background:#fff3cd;border:1px solid #ffc107;color:#856404;font-style:italic;}
-    .tg-chip.new-school::before{content:'★ ';}
         .tg-chip{display:inline-block;padding:2px 7px;border-radius:12px;font-size:10px;font-weight:600;white-space:nowrap;}
         .tg-chip.done{background:#e8f5e9;color:#28a745;border:1px solid #b2dfcc;}
         .tg-chip.pend{background:#fff8e1;color:#b8860b;border:1px solid #ffe082;}
-        .tg-expand-btn{background:none;border:none;cursor:pointer;font-family:'Oswald',sans-serif;font-size:10px;color:#004080;letter-spacing:.4px;text-decoration:underline;padding:0;white-space:nowrap;}
-        </style>
-
-        <div class="tg-kpi-row">
-          <div class="tg-kpi b"><div class="tg-kv">${districts.length}</div><div class="tg-kl">Districts</div></div>
-          <div class="tg-kpi"><div class="tg-kv">${districts.reduce((s,d)=>s+Object.keys(tree[d].chiefdoms).length,0)}</div><div class="tg-kl">Chiefdoms</div></div>
-          <div class="tg-kpi b"><div class="tg-kv">${natSchools.toLocaleString()}</div><div class="tg-kl">Target Schools</div></div>
-          <div class="tg-kpi g"><div class="tg-kv g">${natDone.toLocaleString()}</div><div class="tg-kl">Submitted</div></div>
-          <div class="tg-kpi r"><div class="tg-kv r">${(natSchools-natDone).toLocaleString()}</div><div class="tg-kl">Remaining</div></div>
-          <div class="tg-kpi ${natPct>=80?'g':natPct>=50?'o':'r'}"><div class="tg-kv">${natPct}%</div><div class="tg-kl">Progress</div></div>
-        </div>
-
-        <div style="margin-bottom:20px;">
-          <div style="display:flex;justify-content:space-between;font-family:'Oswald',sans-serif;font-size:11px;color:#607080;margin-bottom:5px;">
-            <span>NATIONAL PROGRESS</span><span style="font-weight:700;color:${natPct>=80?'#28a745':natPct>=50?'#b8860b':'#dc3545'}">${natDone} / ${natSchools} schools (${natPct}%)</span>
-          </div>
-          <div class="tg-nat-bar"><div class="tg-nat-fill" style="width:${natPct}%;background:${natPct>=80?'#28a745':natPct>=50?'#f0a500':'#dc3545'};"></div></div>
-        </div>`;
-
+        .tg-chip.new-school{background:#e3f2fd;color:#1565c0;border:1px solid #90caf9;}
+        .tg-chip.new-school::before{content:'🆕 ';}
+        </style>`;
+    
+        if (statusFilter === 'all') {
+            html += `
+            <div class="tg-kpi-row">
+                <div class="tg-kpi b"><div class="tg-kv">${districts.length}</div><div class="tg-kl">Districts</div></div>
+                <div class="tg-kpi"><div class="tg-kv">${districts.reduce((s,d)=>s+Object.keys(tree[d].chiefdoms).length,0)}</div><div class="tg-kl">Chiefdoms</div></div>
+                <div class="tg-kpi b"><div class="tg-kv">${natSchools.toLocaleString()}</div><div class="tg-kl">Target Schools</div></div>
+                <div class="tg-kpi g"><div class="tg-kv">${natDone.toLocaleString()}</div><div class="tg-kl">Submitted</div></div>
+                <div class="tg-kpi r"><div class="tg-kv">${(natSchools-natDone).toLocaleString()}</div><div class="tg-kl">Remaining</div></div>
+                <div class="tg-kpi ${natPct>=80?'g':natPct>=50?'o':'r'}"><div class="tg-kv">${natPct}%</div><div class="tg-kl">Progress</div></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;">
+                <div class="tg-kpi"><div class="tg-kv" style="color:#004080;">${oldSchools}</div><div class="tg-kl">Old Schools</div><div style="font-size:10px;color:#28a745;">${oldDone} submitted (${oldPct}%)</div></div>
+                <div class="tg-kpi"><div class="tg-kv" style="color:#1565c0;">${newSchools}</div><div class="tg-kl">New Schools</div><div style="font-size:10px;color:#28a745;">${newDone} submitted (${newPct}%)</div></div>
+            </div>
+            <div style="margin-bottom:20px;">
+                <div style="display:flex;justify-content:space-between;font-family:'Oswald',sans-serif;font-size:11px;color:#607080;margin-bottom:5px;">
+                    <span>NATIONAL PROGRESS</span>
+                    <span style="font-weight:700;color:${natPct>=80?'#28a745':natPct>=50?'#b8860b':'#dc3545'}">${natDone} / ${natSchools} schools (${natPct}%)</span>
+                </div>
+                <div class="tg-nat-bar"><div class="tg-nat-fill" style="width:${natPct}%;background:${natPct>=80?'#28a745':natPct>=50?'#f0a500':'#dc3545'};"></div></div>
+            </div>`;
+        } else {
+            html += `
+            <div class="tg-kpi-row">
+                <div class="tg-kpi b"><div class="tg-kv">${natSchools.toLocaleString()}</div><div class="tg-kl">${statusFilter === 'old' ? 'Old' : 'New'} Schools</div></div>
+                <div class="tg-kpi g"><div class="tg-kv">${natDone.toLocaleString()}</div><div class="tg-kl">Submitted</div></div>
+                <div class="tg-kpi r"><div class="tg-kv">${(natSchools-natDone).toLocaleString()}</div><div class="tg-kl">Remaining</div></div>
+                <div class="tg-kpi ${natPct>=80?'g':natPct>=50?'o':'r'}"><div class="tg-kv">${natPct}%</div><div class="tg-kl">Progress</div></div>
+            </div>
+            <div style="margin-bottom:20px;">
+                <div style="display:flex;justify-content:space-between;font-family:'Oswald',sans-serif;font-size:11px;color:#607080;margin-bottom:5px;">
+                    <span>PROGRESS (${statusFilter === 'old' ? 'OLD' : 'NEW'} SCHOOLS)</span>
+                    <span style="font-weight:700;color:${natPct>=80?'#28a745':natPct>=50?'#b8860b':'#dc3545'}">${natDone} / ${natSchools} schools (${natPct}%)</span>
+                </div>
+                <div class="tg-nat-bar"><div class="tg-nat-fill" style="width:${natPct}%;background:${natPct>=80?'#28a745':natPct>=50?'#f0a500':'#dc3545'};"></div></div>
+            </div>`;
+        }
+    
         districts.forEach((district, di) => {
             const chiefdoms = Object.keys(tree[district].chiefdoms).sort();
             let dTotal = 0, dDone = 0;
             chiefdoms.forEach(c => {
-                const schs = tree[district].chiefdoms[c].schools;
+                const schs = tree[district].chiefdoms[c].schools.filter(filterByStatus);
                 dTotal += schs.length;
-                dDone  += schs.filter(s => submitted.has(s.key)).length;
+                dDone += schs.filter(s => submitted.has(s.key)).length;
             });
-            const dPct  = dTotal > 0 ? Math.round((dDone / dTotal) * 100) : 0;
-            const dCol  = dPct >= 80 ? '#28a745' : dPct >= 50 ? '#f0a500' : '#dc3545';
+            const dPct = dTotal > 0 ? Math.round((dDone / dTotal) * 100) : 0;
+            const dCol = dPct >= 80 ? '#28a745' : dPct >= 50 ? '#f0a500' : '#dc3545';
             const panelId = 'tg-panel-' + di;
-
+    
             html += `
             <div class="tg-dist">
-              <div class="tg-dist-hdr" onclick="document.getElementById('${panelId}').style.display=document.getElementById('${panelId}').style.display==='none'?'block':'none'">
-                <svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                <span class="tg-dist-name">${district}</span>
-                <span class="tg-dist-badge">${chiefdoms.length} chiefdom${chiefdoms.length!==1?'s':''}</span>
-                <span class="tg-dist-badge">${dTotal} schools</span>
-                <span class="tg-dist-badge" style="background:${dPct>=80?'rgba(40,167,69,.35)':dPct>=50?'rgba(240,165,0,.35)':'rgba(220,53,69,.35)'};border-color:${dCol};">${dPct}%</span>
-                <svg viewBox="0 0 24 24" style="width:12px;height:12px;flex-shrink:0;"><path d="M6 9l6 6 6-6"/></svg>
-              </div>
-              <div class="tg-dist-progress"><div class="tg-dist-progress-fill" style="width:${dPct}%;"></div></div>
-
-              <div id="${panelId}">
-                <div class="tg-dist-stats">
-                  <div class="tg-dist-stat"><div class="tg-dst-v">${chiefdoms.length}</div><div class="tg-dst-l">Chiefdoms</div></div>
-                  <div class="tg-dist-stat"><div class="tg-dst-v">${dTotal}</div><div class="tg-dst-l">Target Schools</div></div>
-                  <div class="tg-dist-stat"><div class="tg-dst-v" style="color:#28a745;">${dDone}</div><div class="tg-dst-l">Submitted</div></div>
-                  <div class="tg-dist-stat"><div class="tg-dst-v" style="color:#dc3545;">${dTotal-dDone}</div><div class="tg-dst-l">Remaining</div></div>
+                <div class="tg-dist-hdr" onclick="document.getElementById('${panelId}').style.display=document.getElementById('${panelId}').style.display==='none'?'block':'none'">
+                    <svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                    <span class="tg-dist-name">${district}</span>
+                    <span class="tg-dist-badge">${chiefdoms.length} chiefdom${chiefdoms.length!==1?'s':''}</span>
+                    <span class="tg-dist-badge">${dTotal} schools</span>
+                    <span class="tg-dist-badge" style="background:${dPct>=80?'rgba(40,167,69,.35)':dPct>=50?'rgba(240,165,0,.35)':'rgba(220,53,69,.35)'};border-color:${dCol};">${dPct}%</span>
+                    <svg viewBox="0 0 24 24" style="width:12px;height:12px;flex-shrink:0;"><path d="M6 9l6 6 6-6"/></svg>
                 </div>
-
-                <div class="tg-chief-wrap">
-                  <table class="tg-chief-tbl">
-                    <thead><tr>
-                      <th>#</th>
-                      <th>Chiefdom / PHU</th>
-                      <th style="text-align:center;">Target</th>
-                      <th style="text-align:center;">Submitted</th>
-                      <th style="text-align:center;">Remaining</th>
-                      <th style="min-width:160px;">Progress</th>
-                      <th>Schools</th>
-                    </tr></thead>
-                    <tbody>`;
-
+                <div class="tg-dist-progress"><div class="tg-dist-progress-fill" style="width:${dPct}%;"></div></div>
+                <div id="${panelId}">
+                    <div class="tg-dist-stats">
+                        <div class="tg-dist-stat"><div class="tg-dst-v">${chiefdoms.length}</div><div class="tg-dst-l">Chiefdoms</div></div>
+                        <div class="tg-dist-stat"><div class="tg-dst-v">${dTotal}</div><div class="tg-dst-l">Target Schools</div></div>
+                        <div class="tg-dist-stat"><div class="tg-dst-v" style="color:#28a745;">${dDone}</div><div class="tg-dst-l">Submitted</div></div>
+                        <div class="tg-dist-stat"><div class="tg-dst-v" style="color:#dc3545;">${dTotal-dDone}</div><div class="tg-dst-l">Remaining</div></div>
+                    </div>
+                    <div class="tg-chief-wrap">
+                        <table class="tg-chief-tbl">
+                            <thead><tr>
+                                <th>#</th>
+                                <th>Chiefdom / PHU</th>
+                                <th style="text-align:center;">Target</th>
+                                <th style="text-align:center;">Submitted</th>
+                                <th style="text-align:center;">Remaining</th>
+                                <th style="min-width:160px;">Progress</th>
+                                <th>Schools</th>
+                             </tr></thead>
+                            <tbody>`;
+    
             chiefdoms.forEach((chiefdom, ci) => {
-                const schs   = tree[district].chiefdoms[chiefdom].schools;
+                const schs = tree[district].chiefdoms[chiefdom].schools.filter(filterByStatus);
                 const cTotal = schs.length;
-                const cDone  = schs.filter(s => submitted.has(s.key)).length;
-                const cPct   = cTotal > 0 ? Math.round((cDone / cTotal) * 100) : 0;
-                const cCol   = cPct >= 80 ? '#28a745' : cPct >= 50 ? '#f0a500' : '#dc3545';
-                const chipsId = `chips-${di}-${ci}`;
-
-                // Show first 5 schools as chips, expandable
-                // Get new schools added in field
-                const _newSchools = (window.getNewSchoolsAdded ? window.getNewSchoolsAdded() : [])
-                    .map(ns => (ns.key||'').toLowerCase());
-
-                const chips = schs.map(s => {
-                    const done     = submitted.has(s.key);
-                    const isNew    = _newSchools.includes((s.key||'').toLowerCase());
-                    const label    = s.name.length > 22 ? s.name.substring(0,20)+'…' : s.name;
-                    const cls      = done ? 'done' : isNew ? 'pend new-school' : 'pend';
-                    const tooltip  = s.name + ' · ' + s.community + (isNew ? ' (NEW — added in field)' : '');
-                    return `<span class="tg-chip ${cls}" title="${tooltip}">${done?'✓ ':''}${label}</span>`;
-                }).join('');
-
-                // Also add new schools not in CSV target but submitted/added
-                const newInField = _newSchools.filter(k => {
-                    const parts = k.split('|');
-                    const d2 = parts[0]||'', c2 = parts[1]||'', p2 = parts[2]||'';
-                    return d2.toLowerCase() === district.toLowerCase() &&
-                           c2.toLowerCase() === chiefdom.toLowerCase();
-                }).map(k => {
-                    const done2 = submitted.has(k);
-                    const parts = k.split('|');
-                    const nm    = parts[4] || k;
-                    const lbl   = nm.length > 22 ? nm.substring(0,20)+'…' : nm;
-                    return `<span class="tg-chip pend new-school" title="${nm} (NEW — added in field)">★ ${lbl}</span>`;
-                }).join('');
-
-                // Build PHU sub-rows
+                const cDone = schs.filter(s => submitted.has(s.key)).length;
+                const cPct = cTotal > 0 ? Math.round((cDone / cTotal) * 100) : 0;
+                const cCol = cPct >= 80 ? '#28a745' : cPct >= 50 ? '#f0a500' : '#dc3545';
+    
                 const phuMap = {};
                 schs.forEach(s => {
                     if (!phuMap[s.phu]) phuMap[s.phu] = [];
                     phuMap[s.phu].push(s);
                 });
                 const phuKeys = Object.keys(phuMap).sort();
-                const phuSubRows = phuKeys.map((phu, pi) => {
-                    const pSchs  = phuMap[phu];
-                    const pTotal = pSchs.length;
-                    const pDone  = pSchs.filter(s => submitted.has(s.key)).length;
-                    const pPct   = pTotal > 0 ? Math.round((pDone / pTotal) * 100) : 0;
-                    const pCol   = pPct >= 80 ? '#28a745' : pPct >= 50 ? '#f0a500' : '#dc3545';
-                    const pChips = pSchs.map(s => {
-                        const done = submitted.has(s.key);
-                        const lbl  = s.name.length > 20 ? s.name.substring(0,18)+'…' : s.name;
-                        return `<span class="tg-chip ${done?'done':'pend'}" title="${s.name} · ${s.community}">${done?'✓ ':''} ${lbl}</span>`;
-                    }).join('');
-                    return `<tr style="background:#f8fbff;">
-                        <td style="color:#bbb;font-size:10px;padding-left:20px;">└</td>
-                        <td style="font-size:11px;color:#555;padding-left:20px;white-space:nowrap;">
-                            <span style="background:#e8f1fb;color:#004080;padding:1px 7px;border-radius:10px;font-size:10px;font-weight:700;">PHU</span>
-                            ${phu}
-                        </td>
-                        <td style="text-align:center;font-size:11px;">${pTotal}</td>
-                        <td style="text-align:center;font-size:11px;color:#28a745;font-weight:700;">${pDone}</td>
-                        <td style="text-align:center;font-size:11px;color:${pTotal-pDone>0?'#dc3545':'#28a745'};font-weight:700;">${pTotal-pDone}</td>
-                        <td>
-                          <div class="tg-prog-cell">
-                            <div class="tg-prog-bar"><div class="tg-prog-fill" style="width:${pPct}%;background:${pCol};"></div></div>
-                            <span style="font-family:'Oswald',sans-serif;font-size:10px;font-weight:700;color:${pCol};white-space:nowrap;">${pPct}%</span>
-                          </div>
-                        </td>
-                        <td><div class="tg-school-chips">${pChips}</div></td>
-                      </tr>`;
-                }).join('');
-
+    
                 html += `
-                      <tr style="background:#f0f4f8;">
+                    <tr style="background:#f0f4f8;">
                         <td style="color:#8090a0;font-size:11px;font-weight:700;">${ci+1}</td>
                         <td style="font-weight:700;color:#004080;white-space:nowrap;">
                             📍 ${chiefdom}
@@ -1062,30 +966,60 @@
                         <td style="text-align:center;font-weight:700;color:#28a745;">${cDone}</td>
                         <td style="text-align:center;font-weight:700;color:${cTotal-cDone>0?'#dc3545':'#28a745'};">${cTotal-cDone}</td>
                         <td>
-                          <div class="tg-prog-cell">
-                            <div class="tg-prog-bar"><div class="tg-prog-fill" style="width:${cPct}%;background:${cCol};"></div></div>
-                            <span style="font-family:'Oswald',sans-serif;font-size:11px;font-weight:700;color:${cCol};white-space:nowrap;">${cPct}%</span>
-                          </div>
+                            <div class="tg-prog-cell">
+                                <div class="tg-prog-bar"><div class="tg-prog-fill" style="width:${cPct}%;background:${cCol};"></div></div>
+                                <span style="font-family:'Oswald',sans-serif;font-size:11px;font-weight:700;color:${cCol};white-space:nowrap;">${cPct}%</span>
+                            </div>
                         </td>
                         <td style="color:#607080;font-size:10px;">${phuKeys.length} PHU${phuKeys.length!==1?'s':''} · ${cTotal} schools</td>
-                      </tr>
-                      ${phuSubRows}`;
+                    </tr>`;
+    
+                phuKeys.forEach(phu => {
+                    const pSchs = phuMap[phu];
+                    const pTotal = pSchs.length;
+                    const pDone = pSchs.filter(s => submitted.has(s.key)).length;
+                    const pPct = pTotal > 0 ? Math.round((pDone / pTotal) * 100) : 0;
+                    const pCol = pPct >= 80 ? '#28a745' : pPct >= 50 ? '#f0a500' : '#dc3545';
+                    const pChips = pSchs.map(s => {
+                        const done = submitted.has(s.key);
+                        const statusLabel = (s.status || 'Old') === 'New' || (s.status || 'Old') === 'no' ? ' 🆕' : '';
+                        const lbl = s.name.length > 20 ? s.name.substring(0, 18) + '…' : s.name;
+                        return `<span class="tg-chip ${done ? 'done' : 'pend'}" title="${s.name} · ${s.community}${statusLabel}">${done ? '✓ ' : ''}${lbl}${statusLabel}</span>`;
+                    }).join('');
+    
+                    html += `
+                    <tr style="background:#f8fbff;">
+                        <td style="color:#bbb;font-size:10px;padding-left:20px;">└</td>
+                        <td style="font-size:11px;color:#555;padding-left:20px;white-space:nowrap;">
+                            <span style="background:#e8f1fb;color:#004080;padding:1px 7px;border-radius:10px;font-size:10px;font-weight:700;">PHU</span>
+                            ${phu}
+                        </td>
+                        <td style="text-align:center;font-size:11px;">${pTotal}</td>
+                        <td style="text-align:center;font-size:11px;color:#28a745;font-weight:700;">${pDone}</td>
+                        <td style="text-align:center;font-size:11px;color:${pTotal-pDone>0?'#dc3545':'#28a745'};font-weight:700;">${pTotal-pDone}</td>
+                        <td>
+                            <div class="tg-prog-cell">
+                                <div class="tg-prog-bar"><div class="tg-prog-fill" style="width:${pPct}%;background:${pCol};"></div></div>
+                                <span style="font-family:'Oswald',sans-serif;font-size:10px;font-weight:700;color:${pCol};white-space:nowrap;">${pPct}%</span>
+                            </div>
+                        </td>
+                        <td><div class="tg-school-chips">${pChips}</div></td>
+                    </tr>`;
+                });
             });
-
+    
             html += `
-                    </tbody>
-                  </table>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-              </div>
             </div>`;
         });
-
+    
         body.innerHTML = html;
-
-        // Set the first district panel open by default
+    
         const firstPanel = document.getElementById('tg-panel-0');
         if (firstPanel) firstPanel.style.display = 'block';
-        // Others closed
         districts.forEach((_, i) => {
             if (i > 0) {
                 const p = document.getElementById('tg-panel-' + i);
